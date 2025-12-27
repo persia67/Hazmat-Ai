@@ -1,0 +1,5 @@
+{
+  "name": "HazmatAI - Persian Chemical Safety Analyzer",
+  "description": "An AI-powered professional chemical safety analyzer providing comprehensive GHS, MSDS, and occupational health data in Persian.",
+  "requestFramePermissions": []
+}
