@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { 
   AlertTriangle, 
@@ -43,7 +42,7 @@ import {
 import { analyzeChemical, searchSafetyNews, createChatSession, VoiceAssistant, analyzeInteraction } from './services/geminiService';
 import { ChemicalAnalysis, LoadingState, ChatMessage, NewsResult, Language, ThemeConfig, InteractionResult } from './types';
 
-const APP_VERSION = "2.5.0";
+const APP_VERSION = "2.6.0";
 
 // --- Data: Translations & Themes ---
 
@@ -367,7 +366,7 @@ const GHS_PATHS: Record<string, string> = {
   oxidizing: "M12 21a9 9 0 1 1 0-18 9 9 0 0 1 0 18z M12 4c0 0-2 4-2 6 0 5 4 8 4 10 0 2-2 3-3 3-1 0-3-1-3-3 0-3 3-6 3-6 M2 22h20", // Flame over circle
   compressed: "M7 2h10v20H7z M12 2v4", // Cylinder
   corrosive: "M4 18h16M4 14h6m-3 0v4 M16 6l-4 4 2 2 4-4", // Test tubes / Hand (Simplified)
-  toxic: "M12 2c-3 0-5 2-5 5 0 2 1 3 2 4-2 2-2 5-2 5s2-1 5-1 5 1 5 1 0 0 0-3-2-5 1-1 2-2 2-4 0-3-2-5-5-5z M8 22l8-8 M16 22l-8-8", // Skull bones
+  toxic: "M12 2c-3 0-5 2-5 5 0 2 1 3 2 4-2 2-2 5-2 5s2-1 5-1 5 1 0 0 0-3-2-5 1-1 2-2 2-4 0-3-2-5 1-1 2-2 2-4 0-3-2-5-5-5z M8 22l8-8 M16 22l-8-8", // Skull bones
   irritant: "M12 22C6.48 22 2 17.52 2 12S6.48 2 12 2s10 4.48 10 10-4.48 10-10 10zm-1-11v6h2v-6h-2zm0-4v2h2V7h-2z", // Exclamation mark
   health: "M12 2l2 5h5l-4 4 2 5-5-4-5 4 2-5-4-4h5z M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z", // Star man
   environment: "M12 22c5.5 0 10-4.5 10-10S17.5 2 12 2 2 6.5 2 12s4.5 10 10 10z M17 8l-5 8-5-8" // Dead fish / Tree (Simplified)
@@ -410,7 +409,7 @@ const PictogramList: React.FC<{ items: string[], size?: 'sm' | 'lg' }> = ({ item
     return 'irritant'; // Default fallback
   };
 
-  const uniqueItems = Array.from(new Set(items));
+  const uniqueItems = Array.from(new Set(items)) as string[];
 
   return (
     <div className={`flex flex-wrap ${size === 'lg' ? 'gap-6' : 'gap-2 justify-center'}`}>
@@ -477,9 +476,6 @@ const ExpandableSection: React.FC<{
     </div>
   );
 };
-
-// ... (InteractionView, UnitConverterModal, NewsSection, ChatWidget, SettingsModal omitted for brevity as they are unchanged) ...
-// Since I must output the full file, I will re-include them.
 
 const InteractionView: React.FC<{
   savedItems: ChemicalAnalysis[];

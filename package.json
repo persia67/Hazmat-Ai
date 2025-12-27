@@ -1,23 +1,51 @@
+
 {
-  "name": "hazmatai---persian-chemical-safety-analyzer",
+  "name": "hazmatai",
   "private": true,
-  "version": "0.0.0",
-  "type": "module",
+  "version": "2.6.0",
+  "description": "HazmatAI - Persian Chemical Safety Analyzer",
+  "main": "main.js",
   "scripts": {
+    "start": "electron .",
     "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "dist": "npm run build && electron-builder"
+  },
+  "keywords": [
+    "chemistry",
+    "safety",
+    "hazmat",
+    "ai"
+  ],
+  "author": "HazmatAI Team",
+  "license": "ISC",
+  "devDependencies": {
+    "electron": "^30.0.0",
+    "electron-builder": "^24.13.3",
+    "typescript": "^5.2.2",
+    "vite": "^5.2.0"
   },
   "dependencies": {
-    "react": "^19.2.3",
-    "react-dom": "^19.2.3",
     "@google/genai": "^1.34.0",
-    "lucide-react": "^0.562.0"
+    "lucide-react": "^0.562.0",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3"
   },
-  "devDependencies": {
-    "@types/node": "^22.14.0",
-    "@vitejs/plugin-react": "^5.0.0",
-    "typescript": "~5.8.2",
-    "vite": "^6.2.0"
+  "build": {
+    "appId": "com.hazmatai.app",
+    "productName": "HazmatAI",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "dist/**/*",
+      "main.js",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "public/icon.ico"
+    }
   }
 }
