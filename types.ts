@@ -45,6 +45,17 @@ export interface ChemicalAnalysis {
     class: string;
     packingGroup: string;
   };
+  references: string[];
+}
+
+export interface InteractionResult {
+  reactionType: string;
+  equation: string;
+  products: string[];
+  severity: 'HIGH' | 'MEDIUM' | 'LOW' | 'NONE';
+  hazards: string;
+  conditionEffects: string; // Effect of heat/pressure
+  safetyMeasures: string;
 }
 
 export enum LoadingState {
@@ -64,4 +75,20 @@ export interface ChatMessage {
 export interface NewsResult {
   summary: string;
   sources: { title: string; uri: string }[];
+}
+
+export type Language = 'fa' | 'en';
+
+export interface ThemeConfig {
+  id: string;
+  name: string;
+  primary: string; // bg-color-600
+  primaryHover: string; // hover:bg-color-700
+  secondary: string; // bg-color-50
+  accent: string; // text-color-600
+  border: string; // border-color-200
+  lightText: string; // text-color-100
+  ring: string; // ring-color-500
+  shadow: string; // shadow-color-600/20
+  gradient: string; // bg-gradient-to-l ...
 }

@@ -1,18 +1,21 @@
-
 import { GoogleGenAI, Type, LiveServerMessage, Modality } from "@google/genai";
-import { ChemicalAnalysis, NewsResult } from "../types";
+import { ChemicalAnalysis, NewsResult, Language, InteractionResult } from "../types";
 
 const apiKey = process.env.API_KEY || '';
 const ai = new GoogleGenAI({ apiKey });
 
 // --- Existing Analysis ---
-export const analyzeChemical = async (chemicalName: string): Promise<ChemicalAnalysis> => {
+export const analyzeChemical = async (chemicalName: string, lang: Language): Promise<ChemicalAnalysis> => {
+  const languageName = lang === 'fa' ? 'Persian (Farsi)' : 'English';
+  
   const response = await ai.models.generateContent({
     model: "gemini-3-pro-preview",
     contents: `Analyze the following chemical or formula: "${chemicalName}". 
-    Provide a comprehensive safety analysis in Persian (Farsi).`,
+    Provide a comprehensive safety analysis in ${languageName}.`,
     config: {
-      systemInstruction: "You are an elite expert in occupational health, safety (HSE), and industrial chemistry. Your task is to provide accurate, professional, and detailed chemical safety data. Respond strictly in valid JSON format using the provided schema.",
+      systemInstruction: `You are an elite expert in occupational health, safety (HSE), and industrial chemistry. Your task is to provide accurate, professional, and detailed chemical safety data. Respond strictly in valid JSON format using the provided schema. Ensure all string values are in ${languageName}.
+      
+      IMPORTANT: You must cite the specific standards or databases used for this analysis (e.g., "GHS Rev. 9", "OSHA 1910.1200", "NIOSH Pocket Guide", "PubChem CID xxxx") in the 'references' field.`,
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
@@ -93,11 +96,16 @@ export const analyzeChemical = async (chemicalName: string): Promise<ChemicalAna
               packingGroup: { type: Type.STRING }
             },
             required: ["unNumber", "class", "packingGroup"]
+          },
+          references: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: "List of standards and sources used (e.g., GHS, OSHA, NIOSH)"
           }
         },
         required: [
           "identification", "hazards", "exposureLimits", "reactions", 
-          "safetyMeasures", "firstAid", "emergency", "transport"
+          "safetyMeasures", "firstAid", "emergency", "transport", "references"
         ]
       }
     }
@@ -109,22 +117,76 @@ export const analyzeChemical = async (chemicalName: string): Promise<ChemicalAna
     return JSON.parse(text) as ChemicalAnalysis;
   } catch (error) {
     console.error("Failed to parse AI response:", error);
-    throw new Error("خطا در پردازش اطلاعات دریافتی از هوش مصنوعی");
+    throw new Error(lang === 'fa' ? "خطا در پردازش اطلاعات دریافتی" : "Error processing AI response");
+  }
+};
+
+// --- Interaction Analysis (New) ---
+export const analyzeInteraction = async (chemA: string, chemB: string, conditions: { heat: boolean, pressure: boolean }, lang: Language): Promise<InteractionResult> => {
+  const languageName = lang === 'fa' ? 'Persian (Farsi)' : 'English';
+  const conditionText = `Conditions included: ${conditions.heat ? 'High Heat/Thermal Decomposition' : 'Ambient Temp'} AND ${conditions.pressure ? 'High Pressure' : 'Atmospheric Pressure'}.`;
+
+  const response = await ai.models.generateContent({
+    model: "gemini-3-pro-preview",
+    contents: `Analyze the chemical interaction/reaction between "${chemA}" and "${chemB}". 
+    ${conditionText}
+    Focus heavily on safety consequences, incompatibility, produced gases, and explosion risks.
+    Provide the response in ${languageName}.`,
+    config: {
+      systemInstruction: `You are a Senior Chemical Process Safety Engineer. Predict the outcome of mixing two chemicals under specific conditions.
+      Output strictly JSON.
+      Fields:
+      - reactionType: (e.g., Exothermic, Neutralization, Oxidation, No Reaction)
+      - equation: Balanced chemical equation (if applicable, or description)
+      - products: List of chemical names produced
+      - severity: ONE OF ['HIGH', 'MEDIUM', 'LOW', 'NONE'] based on safety risk.
+      - hazards: Detailed safety description (e.g., "Generates toxic chlorine gas", "Violent explosion risk").
+      - conditionEffects: How heat/pressure modifies the risk.
+      - safetyMeasures: Immediate actions to prevent or mitigate.
+      `,
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          reactionType: { type: Type.STRING },
+          equation: { type: Type.STRING },
+          products: { type: Type.ARRAY, items: { type: Type.STRING } },
+          severity: { type: Type.STRING, enum: ['HIGH', 'MEDIUM', 'LOW', 'NONE'] },
+          hazards: { type: Type.STRING },
+          conditionEffects: { type: Type.STRING },
+          safetyMeasures: { type: Type.STRING }
+        },
+        required: ["reactionType", "equation", "products", "severity", "hazards", "conditionEffects", "safetyMeasures"]
+      }
+    }
+  });
+
+  try {
+    const text = response.text;
+    if (!text) throw new Error("No response from AI");
+    return JSON.parse(text) as InteractionResult;
+  } catch (error) {
+    console.error("Failed to parse Interaction response:", error);
+    throw new Error(lang === 'fa' ? "خطا در تحلیل واکنش" : "Error analyzing interaction");
   }
 };
 
 // --- News Search (Grounding) ---
-export const searchSafetyNews = async (query: string): Promise<NewsResult> => {
+export const searchSafetyNews = async (query: string, lang: Language): Promise<NewsResult> => {
+  const prompt = lang === 'fa' 
+    ? `Find the latest safety incidents, regulatory updates, or important news regarding "${query}". Provide a brief summary in Persian.`
+    : `Find the latest safety incidents, regulatory updates, or important news regarding "${query}". Provide a brief summary in English.`;
+
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
-    contents: `Find the latest safety incidents, regulatory updates, or important news regarding "${query}". Provide a brief summary in Persian.`,
+    contents: prompt,
     config: {
       tools: [{ googleSearch: {} }],
     }
   });
 
-  const summary = response.text || "خبر جدیدی یافت نشد.";
-  // @ts-ignore - groundingMetadata type might not be fully inferred
+  const summary = response.text || (lang === 'fa' ? "خبر جدیدی یافت نشد." : "No recent news found.");
+  // @ts-ignore
   const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
   const sources = chunks
     .map((chunk: any) => chunk.web)
@@ -135,11 +197,15 @@ export const searchSafetyNews = async (query: string): Promise<NewsResult> => {
 };
 
 // --- Chat Bot ---
-export const createChatSession = () => {
+export const createChatSession = (lang: Language) => {
+  const instruction = lang === 'fa'
+    ? "You are a helpful and knowledgeable chemical safety assistant. Answer questions clearly in Persian."
+    : "You are a helpful and knowledgeable chemical safety assistant. Answer questions clearly in English.";
+
   return ai.chats.create({
     model: "gemini-3-flash-preview",
     config: {
-      systemInstruction: "You are a helpful and knowledgeable chemical safety assistant. Answer questions clearly in Persian.",
+      systemInstruction: instruction,
     }
   });
 };
@@ -188,7 +254,7 @@ export class VoiceAssistant {
   private sessionResolve: ((value: any) => void) | null = null;
   private sessionPromise: Promise<any>;
 
-  constructor(private onStatusChange: (active: boolean) => void) {
+  constructor(private onStatusChange: (active: boolean) => void, private lang: Language) {
     this.sessionPromise = new Promise((resolve) => {
       this.sessionResolve = resolve;
     });
@@ -205,7 +271,10 @@ export class VoiceAssistant {
       this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
       const aiClient = new GoogleGenAI({ apiKey });
-      
+      const instruction = this.lang === 'fa' 
+        ? "You are a professional chemical safety consultant speaking in Persian. Keep responses concise."
+        : "You are a professional chemical safety consultant speaking in English. Keep responses concise.";
+
       // Connect to Gemini Live
       aiClient.live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-09-2025',
@@ -214,7 +283,7 @@ export class VoiceAssistant {
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } },
           },
-          systemInstruction: "You are a professional chemical safety consultant speaking in Persian. Keep responses concise.",
+          systemInstruction: instruction,
         },
         callbacks: {
           onopen: () => {
@@ -272,7 +341,7 @@ export class VoiceAssistant {
   private async handleServerMessage(message: LiveServerMessage) {
     const audioData = message.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
     if (audioData && this.outputContext) {
-      const audioBytes = b64ToUint8Array(audioData);
+      const audioBytes = b64ToUint8Array(audioData as string);
       const audioBuffer = await this.decodeAudio(audioBytes);
       this.playAudio(audioBuffer);
     }
@@ -340,6 +409,5 @@ export class VoiceAssistant {
       this.outputContext.close();
       this.outputContext = null;
     }
-    // Note: Live session cleanup relies on the socket closing or simple disconnect
   }
 }
