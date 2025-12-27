@@ -1,10 +1,12 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
-import { ChemicalAnalysis } from "../types";
+import { GoogleGenAI, Type, LiveServerMessage, Modality } from "@google/genai";
+import { ChemicalAnalysis, NewsResult } from "../types";
 
+const apiKey = process.env.API_KEY || '';
+const ai = new GoogleGenAI({ apiKey });
+
+// --- Existing Analysis ---
 export const analyzeChemical = async (chemicalName: string): Promise<ChemicalAnalysis> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
-  
   const response = await ai.models.generateContent({
     model: "gemini-3-pro-preview",
     contents: `Analyze the following chemical or formula: "${chemicalName}". 
@@ -110,3 +112,234 @@ export const analyzeChemical = async (chemicalName: string): Promise<ChemicalAna
     throw new Error("خطا در پردازش اطلاعات دریافتی از هوش مصنوعی");
   }
 };
+
+// --- News Search (Grounding) ---
+export const searchSafetyNews = async (query: string): Promise<NewsResult> => {
+  const response = await ai.models.generateContent({
+    model: "gemini-3-flash-preview",
+    contents: `Find the latest safety incidents, regulatory updates, or important news regarding "${query}". Provide a brief summary in Persian.`,
+    config: {
+      tools: [{ googleSearch: {} }],
+    }
+  });
+
+  const summary = response.text || "خبر جدیدی یافت نشد.";
+  // @ts-ignore - groundingMetadata type might not be fully inferred
+  const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+  const sources = chunks
+    .map((chunk: any) => chunk.web)
+    .filter((web: any) => web)
+    .map((web: any) => ({ title: web.title, uri: web.uri }));
+
+  return { summary, sources };
+};
+
+// --- Chat Bot ---
+export const createChatSession = () => {
+  return ai.chats.create({
+    model: "gemini-3-flash-preview",
+    config: {
+      systemInstruction: "You are a helpful and knowledgeable chemical safety assistant. Answer questions clearly in Persian.",
+    }
+  });
+};
+
+// --- Live Audio Helpers ---
+
+function b64ToUint8Array(base64: string) {
+  const binaryString = atob(base64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+}
+
+function arrayBufferToBase64(buffer: ArrayBuffer) {
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+// Audio Resampling/Conversion
+function floatTo16BitPCM(input: Float32Array) {
+  const output = new Int16Array(input.length);
+  for (let i = 0; i < input.length; i++) {
+    const s = Math.max(-1, Math.min(1, input[i]));
+    output[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+  }
+  return output.buffer;
+}
+
+// --- Live Voice Assistant Class ---
+export class VoiceAssistant {
+  private inputContext: AudioContext | null = null;
+  private outputContext: AudioContext | null = null;
+  private stream: MediaStream | null = null;
+  private processor: ScriptProcessorNode | null = null;
+  private source: MediaStreamAudioSourceNode | null = null;
+  private nextStartTime = 0;
+  private isActive = false;
+  private sessionResolve: ((value: any) => void) | null = null;
+  private sessionPromise: Promise<any>;
+
+  constructor(private onStatusChange: (active: boolean) => void) {
+    this.sessionPromise = new Promise((resolve) => {
+      this.sessionResolve = resolve;
+    });
+  }
+
+  async start() {
+    if (this.isActive) return;
+    this.isActive = true;
+    this.onStatusChange(true);
+
+    try {
+      this.inputContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
+      this.outputContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+      this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      const aiClient = new GoogleGenAI({ apiKey });
+      
+      // Connect to Gemini Live
+      aiClient.live.connect({
+        model: 'gemini-2.5-flash-native-audio-preview-09-2025',
+        config: {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: {
+            voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } },
+          },
+          systemInstruction: "You are a professional chemical safety consultant speaking in Persian. Keep responses concise.",
+        },
+        callbacks: {
+          onopen: () => {
+            console.log("Gemini Live Connected");
+            this.setupAudioInput();
+          },
+          onmessage: async (message: LiveServerMessage) => {
+            this.handleServerMessage(message);
+          },
+          onclose: () => {
+            console.log("Gemini Live Closed");
+            this.stop();
+          },
+          onerror: (err) => {
+            console.error("Gemini Live Error", err);
+            this.stop();
+          }
+        }
+      }).then(session => {
+        if (this.sessionResolve) this.sessionResolve(session);
+      });
+
+    } catch (error) {
+      console.error("Failed to start voice assistant:", error);
+      this.stop();
+    }
+  }
+
+  private setupAudioInput() {
+    if (!this.inputContext || !this.stream) return;
+
+    this.source = this.inputContext.createMediaStreamSource(this.stream);
+    this.processor = this.inputContext.createScriptProcessor(4096, 1, 1);
+
+    this.processor.onaudioprocess = (e) => {
+      if (!this.isActive) return;
+      const inputData = e.inputBuffer.getChannelData(0);
+      const pcm16 = floatTo16BitPCM(inputData);
+      const base64 = arrayBufferToBase64(pcm16);
+
+      this.sessionPromise.then(session => {
+        session.sendRealtimeInput({
+          media: {
+            mimeType: 'audio/pcm;rate=16000',
+            data: base64
+          }
+        });
+      });
+    };
+
+    this.source.connect(this.processor);
+    this.processor.connect(this.inputContext.destination);
+  }
+
+  private async handleServerMessage(message: LiveServerMessage) {
+    const audioData = message.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
+    if (audioData && this.outputContext) {
+      const audioBytes = b64ToUint8Array(audioData);
+      const audioBuffer = await this.decodeAudio(audioBytes);
+      this.playAudio(audioBuffer);
+    }
+    
+    // Handle interruption
+    if (message.serverContent?.interrupted) {
+      this.nextStartTime = 0; // Reset
+      // In a real app, we would cancel current playing nodes
+    }
+  }
+
+  private async decodeAudio(bytes: Uint8Array): Promise<AudioBuffer> {
+    if (!this.outputContext) throw new Error("No output context");
+    
+    // Manually decode PCM 16-bit 24kHz
+    const sampleRate = 24000;
+    const int16 = new Int16Array(bytes.buffer);
+    const float32 = new Float32Array(int16.length);
+    for (let i = 0; i < int16.length; i++) {
+      float32[i] = int16[i] / 32768.0;
+    }
+
+    const buffer = this.outputContext.createBuffer(1, float32.length, sampleRate);
+    buffer.copyToChannel(float32, 0);
+    return buffer;
+  }
+
+  private playAudio(buffer: AudioBuffer) {
+    if (!this.outputContext) return;
+
+    const source = this.outputContext.createBufferSource();
+    source.buffer = buffer;
+    source.connect(this.outputContext.destination);
+
+    const currentTime = this.outputContext.currentTime;
+    if (this.nextStartTime < currentTime) {
+      this.nextStartTime = currentTime;
+    }
+    
+    source.start(this.nextStartTime);
+    this.nextStartTime += buffer.duration;
+  }
+
+  stop() {
+    this.isActive = false;
+    this.onStatusChange(false);
+
+    if (this.stream) {
+      this.stream.getTracks().forEach(track => track.stop());
+      this.stream = null;
+    }
+    if (this.processor) {
+      this.processor.disconnect();
+      this.processor = null;
+    }
+    if (this.source) {
+      this.source.disconnect();
+      this.source = null;
+    }
+    if (this.inputContext) {
+      this.inputContext.close();
+      this.inputContext = null;
+    }
+    if (this.outputContext) {
+      this.outputContext.close();
+      this.outputContext = null;
+    }
+    // Note: Live session cleanup relies on the socket closing or simple disconnect
+  }
+}

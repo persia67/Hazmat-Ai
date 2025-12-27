@@ -53,3 +53,15 @@ export enum LoadingState {
   SUCCESS = 'SUCCESS',
   ERROR = 'ERROR'
 }
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'model';
+  text: string;
+  isThinking?: boolean;
+}
+
+export interface NewsResult {
+  summary: string;
+  sources: { title: string; uri: string }[];
+}

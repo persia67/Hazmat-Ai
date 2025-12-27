@@ -1,5 +1,5 @@
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { 
   AlertTriangle, 
   Search, 
@@ -20,10 +20,16 @@ import {
   Scale,
   Trash2,
   ArrowLeft,
-  X
+  X,
+  MessageSquare,
+  Mic,
+  Send,
+  Sparkles,
+  ExternalLink,
+  Newspaper
 } from 'lucide-react';
-import { analyzeChemical } from './services/geminiService';
-import { ChemicalAnalysis, LoadingState } from './types';
+import { analyzeChemical, searchSafetyNews, createChatSession, VoiceAssistant } from './services/geminiService';
+import { ChemicalAnalysis, LoadingState, ChatMessage, NewsResult } from './types';
 
 // --- Helper Components ---
 
@@ -84,6 +90,268 @@ const ExpandableSection: React.FC<{
   );
 };
 
+const NewsSection: React.FC<{ query: string }> = ({ query }) => {
+  const [news, setNews] = useState<NewsResult | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    // Reset when query changes
+    setNews(null);
+    setLoaded(false);
+  }, [query]);
+
+  const fetchNews = async () => {
+    setLoading(true);
+    try {
+      const result = await searchSafetyNews(query);
+      setNews(result);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+      setLoaded(true);
+    }
+  };
+
+  if (!loaded && !loading) {
+    return (
+      <button 
+        onClick={fetchNews}
+        className="w-full bg-blue-50 hover:bg-blue-100 text-blue-700 p-4 rounded-xl flex items-center justify-center gap-2 transition-colors font-bold text-sm border border-blue-200 border-dashed"
+      >
+        <Newspaper className="w-4 h-4" />
+        جستجوی اخبار و حوادث اخیر (Google Search)
+      </button>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="bg-slate-50 p-4 rounded-xl flex items-center justify-center gap-2 text-slate-500 text-sm">
+        <Loader2 className="w-4 h-4 animate-spin" />
+        در حال جستجو در گوگل...
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm animate-in fade-in">
+      <h4 className="font-bold text-slate-800 flex items-center gap-2 mb-2">
+        <Sparkles className="w-4 h-4 text-blue-600" />
+        اخبار و رویدادهای اخیر
+      </h4>
+      <p className="text-slate-700 text-sm leading-relaxed mb-4">{news?.summary}</p>
+      
+      {news?.sources && news.sources.length > 0 && (
+        <div className="border-t border-slate-100 pt-3">
+          <span className="text-xs font-bold text-slate-400 block mb-2">منابع:</span>
+          <div className="flex flex-col gap-2">
+            {news.sources.map((source, i) => (
+              <a 
+                key={i} 
+                href={source.uri} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 text-xs text-blue-600 hover:underline truncate"
+              >
+                <ExternalLink className="w-3 h-3 shrink-0" />
+                {source.title}
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const ChatWidget = () => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [mode, setMode] = useState<'chat' | 'voice'>('chat');
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  const [isVoiceActive, setIsVoiceActive] = useState(false);
+  
+  // Refs
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatSessionRef = useRef<any>(null);
+  const voiceAssistantRef = useRef<VoiceAssistant | null>(null);
+
+  useEffect(() => {
+    if (isOpen && !chatSessionRef.current) {
+      chatSessionRef.current = createChatSession();
+      // Welcome message
+      setMessages([{
+        id: 'welcome',
+        role: 'model',
+        text: 'سلام! من دستیار هوشمند ایمنی شما هستم. چطور می‌توانم کمک کنم؟'
+      }]);
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, isTyping]);
+
+  const handleSendMessage = async () => {
+    if (!input.trim() || isTyping) return;
+    
+    const userMsg: ChatMessage = { id: Date.now().toString(), role: 'user', text: input };
+    setMessages(prev => [...prev, userMsg]);
+    setInput('');
+    setIsTyping(true);
+
+    try {
+      const result = await chatSessionRef.current.sendMessage(userMsg.text);
+      const botMsg: ChatMessage = { 
+        id: (Date.now() + 1).toString(), 
+        role: 'model', 
+        text: result.response.text() 
+      };
+      setMessages(prev => [...prev, botMsg]);
+    } catch (e) {
+      console.error(e);
+      setMessages(prev => [...prev, { 
+        id: Date.now().toString(), 
+        role: 'model', 
+        text: 'متاسفانه خطایی رخ داد. لطفا دوباره تلاش کنید.' 
+      }]);
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
+  const toggleVoice = async () => {
+    if (!voiceAssistantRef.current) {
+      voiceAssistantRef.current = new VoiceAssistant((active) => setIsVoiceActive(active));
+    }
+
+    if (isVoiceActive) {
+      voiceAssistantRef.current.stop();
+    } else {
+      await voiceAssistantRef.current.start();
+    }
+  };
+
+  return (
+    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-4 no-print">
+      {isOpen && (
+        <div className="bg-white rounded-2xl shadow-2xl w-80 sm:w-96 h-[500px] flex flex-col border border-slate-200 animate-in slide-in-from-bottom-10 fade-in">
+          {/* Header */}
+          <div className="bg-slate-900 text-white p-4 rounded-t-2xl flex justify-between items-center">
+            <div className="flex items-center gap-2">
+              <div className="bg-blue-500 p-1.5 rounded-lg">
+                {mode === 'chat' ? <MessageSquare className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+              </div>
+              <span className="font-bold text-sm">دستیار هوشمند Hazmat</span>
+            </div>
+            <div className="flex items-center gap-1">
+               <button 
+                onClick={() => setMode(mode === 'chat' ? 'voice' : 'chat')}
+                className={`text-xs px-2 py-1 rounded border transition-colors ${mode === 'voice' ? 'bg-red-500/20 border-red-500 text-red-100' : 'bg-slate-700 border-slate-600'}`}
+              >
+                {mode === 'chat' ? 'حالت صوتی' : 'حالت متنی'}
+              </button>
+              <button onClick={() => setIsOpen(false)} className="hover:bg-slate-700 p-1 rounded transition-colors">
+                <ChevronDown className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Content */}
+          {mode === 'chat' ? (
+            <>
+              <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
+                {messages.map(msg => (
+                  <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[85%] p-3 rounded-2xl text-sm leading-relaxed ${
+                      msg.role === 'user' 
+                        ? 'bg-blue-600 text-white rounded-br-none' 
+                        : 'bg-white border border-slate-200 text-slate-800 rounded-bl-none shadow-sm'
+                    }`}>
+                      {msg.text}
+                    </div>
+                  </div>
+                ))}
+                {isTyping && (
+                  <div className="flex justify-start">
+                    <div className="bg-white border border-slate-200 px-4 py-3 rounded-2xl rounded-bl-none shadow-sm">
+                      <div className="flex gap-1">
+                        <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"></div>
+                        <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce delay-100"></div>
+                        <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce delay-200"></div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <div ref={chatEndRef} />
+              </div>
+              <div className="p-3 border-t border-slate-200 bg-white rounded-b-2xl">
+                <div className="flex gap-2">
+                  <input 
+                    type="text" 
+                    value={input}
+                    onChange={e => setInput(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleSendMessage()}
+                    placeholder="سوال خود را بپرسید..."
+                    className="flex-1 bg-slate-100 border border-slate-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-blue-500 transition-colors"
+                    dir="rtl"
+                  />
+                  <button 
+                    onClick={handleSendMessage}
+                    disabled={!input.trim() || isTyping}
+                    className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-xl transition-colors disabled:opacity-50"
+                  >
+                    <Send className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center bg-slate-900 rounded-b-2xl relative overflow-hidden">
+               {/* Ambient Background */}
+               <div className={`absolute inset-0 bg-red-600/10 transition-opacity duration-1000 ${isVoiceActive ? 'opacity-100' : 'opacity-0'}`}></div>
+               <div className="relative z-10 flex flex-col items-center gap-6">
+                 <div className={`w-24 h-24 rounded-full flex items-center justify-center transition-all duration-300 ${isVoiceActive ? 'bg-red-600 shadow-[0_0_40px_rgba(220,38,38,0.4)] scale-110' : 'bg-slate-700'}`}>
+                    <Mic className={`w-10 h-10 text-white ${isVoiceActive ? 'animate-pulse' : ''}`} />
+                 </div>
+                 <div className="text-center">
+                   <h3 className="text-white font-bold text-lg mb-1">
+                     {isVoiceActive ? 'در حال مکالمه...' : 'مکالمه صوتی'}
+                   </h3>
+                   <p className="text-slate-400 text-xs">
+                     {isVoiceActive ? 'برای پایان ضربه بزنید' : 'برای شروع صحبت کنید'}
+                   </p>
+                 </div>
+                 <button 
+                   onClick={toggleVoice}
+                   className={`px-8 py-3 rounded-xl font-bold transition-all text-sm ${
+                     isVoiceActive 
+                       ? 'bg-red-600 text-white hover:bg-red-700 shadow-lg shadow-red-600/20' 
+                       : 'bg-white text-slate-900 hover:bg-slate-100'
+                   }`}
+                 >
+                   {isVoiceActive ? 'پایان مکالمه' : 'شروع گفتگو'}
+                 </button>
+               </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      <button 
+        onClick={() => setIsOpen(!isOpen)}
+        className={`p-4 rounded-full shadow-lg transition-all hover:scale-105 active:scale-95 flex items-center justify-center ${isOpen ? 'bg-slate-700 text-white' : 'bg-blue-600 text-white shadow-blue-600/30'}`}
+      >
+        {isOpen ? <X className="w-6 h-6" /> : <MessageSquare className="w-6 h-6" />}
+      </button>
+    </div>
+  );
+};
+
+// --- Comparison Table Component (Existing) ---
 const ComparisonTable: React.FC<{
   items: ChemicalAnalysis[];
   onRemove: (index: number) => void;
@@ -227,6 +495,7 @@ export default function App() {
     identification: true,
     hazards: true,
     exposureLimits: false,
+    news: true, // Default open news
   });
 
   const toggleSection = (id: string) => {
@@ -236,7 +505,7 @@ export default function App() {
   const toggleAll = (open: boolean) => {
     const keys = [
       'identification', 'hazards', 'exposureLimits', 'reactions', 
-      'safetyMeasures', 'firstAid', 'emergency', 'transport'
+      'safetyMeasures', 'firstAid', 'emergency', 'transport', 'news'
     ];
     const newState = keys.reduce((acc, key) => ({ ...acc, [key]: open }), {});
     setOpenSections(newState);
@@ -255,13 +524,12 @@ export default function App() {
     
     setStatus(LoadingState.LOADING);
     setError(null);
-    setIsComparisonMode(false); // Switch back to search view when searching
+    setIsComparisonMode(false); 
     try {
       const data = await analyzeChemical(query);
       setResult(data);
       setStatus(LoadingState.SUCCESS);
       
-      // Auto open critical sections, but keep 'exposureLimits' closed as requested
       setOpenSections({
         identification: true,
         hazards: true,
@@ -270,7 +538,8 @@ export default function App() {
         safetyMeasures: false,
         firstAid: false,
         emergency: false,
-        transport: false
+        transport: false,
+        news: true
       });
     } catch (err: any) {
       setError(err.message || "خطایی در برقراری ارتباط با سرور رخ داد");
@@ -280,7 +549,6 @@ export default function App() {
 
   const addToComparison = () => {
     if (!result) return;
-    // Simple deduplication check based on CAS or Name
     const exists = comparisonList.some(
       item => item.identification.casNumber === result.identification.casNumber || 
               item.identification.chemicalName === result.identification.chemicalName
@@ -310,7 +578,7 @@ export default function App() {
   return (
     <div className="min-h-screen pb-32 bg-slate-50/50">
       {/* Header */}
-      <header className="bg-gradient-to-l from-slate-900 to-slate-800 text-white shadow-xl no-print sticky top-0 z-50">
+      <header className="bg-gradient-to-l from-slate-900 to-slate-800 text-white shadow-xl no-print sticky top-0 z-40">
         <div className="max-w-6xl mx-auto px-4 py-6 flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-4 cursor-pointer" onClick={() => {
             setIsComparisonMode(false);
@@ -355,7 +623,7 @@ export default function App() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-4xl mx-auto px-4 mt-10">
+      <main className="max-w-4xl mx-auto px-4 mt-10 relative">
         
         {/* Comparison Mode View */}
         {isComparisonMode ? (
@@ -473,6 +741,18 @@ export default function App() {
 
                 {/* Accordion List */}
                 <div className="space-y-4">
+                  {/* News Section (New) */}
+                  <ExpandableSection 
+                    id="news"
+                    isOpen={!!openSections.news}
+                    onToggle={() => toggleSection('news')}
+                    icon={Newspaper} 
+                    title="اطلاعات و اخبار تکمیلی" 
+                    color="text-blue-500"
+                  >
+                    <NewsSection query={result.identification.chemicalName} />
+                  </ExpandableSection>
+
                   <ExpandableSection 
                     id="identification"
                     isOpen={!!openSections.identification}
@@ -664,6 +944,9 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Chat Widget */}
+      <ChatWidget />
 
       {/* Footer */}
       <footer className="mt-20 border-t border-slate-200 py-12 text-center text-slate-400 no-print">
