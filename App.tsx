@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { 
   AlertTriangle, 
@@ -42,7 +43,7 @@ import {
 import { analyzeChemical, searchSafetyNews, createChatSession, VoiceAssistant, analyzeInteraction } from './services/geminiService';
 import { ChemicalAnalysis, LoadingState, ChatMessage, NewsResult, Language, ThemeConfig, InteractionResult } from './types';
 
-const APP_VERSION = "2.6.0";
+const APP_VERSION = "2.6.1";
 
 // --- Data: Translations & Themes ---
 
@@ -359,17 +360,34 @@ const THEMES: Record<string, ThemeConfig> = {
   }
 };
 
-// --- GHS Pictogram Assets (Paths) ---
+// --- GHS Pictogram Assets (Standard GHS Paths) ---
 const GHS_PATHS: Record<string, string> = {
-  explosive: "M12 2l2.4 7.2h7.6l-6 4.8 2.4 7.2-6-4.8-6 4.8 2.4-7.2-6-4.8h7.6z M12 22v-4 M12 6V2 M4.93 4.93l2.83 2.83 M16.24 16.24l2.83 2.83 M2 12h4 M18 12h4 M4.93 19.07l2.83-2.83 M16.24 7.76l2.83-2.83", // Bomb burst (abstract)
-  flammable: "M12 2c0 0-2 4-2 6 0 5 4 8 4 10 0 2-2 3-3 3-1 0-3-1-3-3 0-3 3-6 3-6s-4 2-4 7c0 4 3 7 7 7s6-3 6-7c0-5-5-10-8-17z", // Flame
-  oxidizing: "M12 21a9 9 0 1 1 0-18 9 9 0 0 1 0 18z M12 4c0 0-2 4-2 6 0 5 4 8 4 10 0 2-2 3-3 3-1 0-3-1-3-3 0-3 3-6 3-6 M2 22h20", // Flame over circle
-  compressed: "M7 2h10v20H7z M12 2v4", // Cylinder
-  corrosive: "M4 18h16M4 14h6m-3 0v4 M16 6l-4 4 2 2 4-4", // Test tubes / Hand (Simplified)
-  toxic: "M12 2c-3 0-5 2-5 5 0 2 1 3 2 4-2 2-2 5-2 5s2-1 5-1 5 1 0 0 0-3-2-5 1-1 2-2 2-4 0-3-2-5 1-1 2-2 2-4 0-3-2-5-5-5z M8 22l8-8 M16 22l-8-8", // Skull bones
-  irritant: "M12 22C6.48 22 2 17.52 2 12S6.48 2 12 2s10 4.48 10 10-4.48 10-10 10zm-1-11v6h2v-6h-2zm0-4v2h2V7h-2z", // Exclamation mark
-  health: "M12 2l2 5h5l-4 4 2 5-5-4-5 4 2-5-4-4h5z M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z", // Star man
-  environment: "M12 22c5.5 0 10-4.5 10-10S17.5 2 12 2 2 6.5 2 12s4.5 10 10 10z M17 8l-5 8-5-8" // Dead fish / Tree (Simplified)
+  // GHS01: Explosive (Exploding Bomb)
+  explosive: "M12 2c-.3 0-.5.2-.5.5v3c0 .3.2.5.5.5s.5-.2.5-.5v-3c0-.3-.2-.5-.5-.5zM12 18c-.3 0-.5.2-.5.5v3c0 .3.2.5.5.5s.5-.2.5-.5v-3c0-.3-.2-.5-.5-.5zM6 11H3c-.3 0-.5.2-.5.5s.2.5.5.5h3c.3 0 .5-.2.5-.5s-.2-.5-.5-.5zM21 11h-3c-.3 0-.5.2-.5.5s.2.5.5.5h3c.3 0 .5-.2.5-.5s-.2-.5-.5-.5zM18.4 17l2.1 2.1c.2.2.5.2.7 0 .2-.2.2-.5 0-.7l-2.1-2.1c-.2-.2-.5-.2-.7 0-.2.2-.2.5 0 .7zM4.9 3.5c-.2-.2-.5-.2-.7 0s-.2.5 0 .7l2.1 2.1c.2.2.5.2.7 0 .2-.2.2-.5 0-.7L4.9 3.5zM19.1 4.2l-2.1 2.1c-.2.2-.2.5 0 .7.2.2.5.2.7 0l2.1-2.1c.2-.2.2-.5 0-.7-.2-.2-.5-.2-.7 0zM5.6 16.3c-.2-.2-.5-.2-.7 0l-2.1 2.1c-.2.2-.2.5 0 .7.2.2.5.2.7 0l2.1-2.1c.2-.2.2-.5 0-.7z M12 8c-2.2 0-4 1.8-4 4s1.8 4 4 4 4-1.8 4-4-1.8-4-4-4z",
+  
+  // GHS02: Flammable (Flame)
+  flammable: "M12 23c0-4.3 3.3-6.5 3.3-9.5 0-3-1.8-4.5-1.8-6.5 0 4-3.5 5-3.5 9 0 3.5 2 7 2 7zm-1-16c0 0 2.5 2 2.5 5 0 2.5-1.5 3.5-1.5 5.5 0-2-1-3-1-5 0-3-1-4 0-5.5z M10 23h4", 
+  
+  // GHS03: Oxidizing (Flame over Circle)
+  oxidizing: "M12 4.5c0 0 2.5 3 2.5 5 0 1.5-1 2.5-2.5 2.5-1.5 0-2.5-1-2.5-2.5 0-2 2.5-5 2.5-5z M12 13a5 5 0 1 0 0 10 5 5 0 0 0 0-10zm0 8a3 3 0 1 1 0-6 3 3 0 0 1 0 6z", 
+  
+  // GHS04: Compressed Gas (Gas Cylinder)
+  compressed: "M8 6h8v13H8z M10 2h4v4h-4z M7 6h10 M7 19h10", 
+  
+  // GHS05: Corrosive (Corrosion)
+  corrosive: "M2 6h7v2H2z M15 6h7v2h-7z M4 9l3 6M12 9l3 6M2 19h20c0 1.5-1 2.5-2.5 2.5h-15C3 21.5 2 20.5 2 19z M5 17h4 M15 17h4 M6 13h2 M16 13h2", 
+  
+  // GHS06: Toxic (Skull and Crossbones)
+  toxic: "M12 2c-3.3 0-6 2.7-6 6 0 2 1.5 4 3.5 5v1.5h5V13c2-1 3.5-3 3.5-5 0-3.3-2.7-6-6-6zm-2 5.5a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0zm5.5 1.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z M4 20l16-14M4 6l16 14", 
+  
+  // GHS07: Irritant (Exclamation Mark)
+  irritant: "M11 5h2v9h-2z M11 17h2v2h-2z", 
+  
+  // GHS08: Health Hazard (Health Hazard / Carcinogen)
+  health: "M12 4a3 3 0 1 0 0 6 3 3 0 0 0 0-6zm-5 8c-2 0-4 1-4 4v4h18v-4c0-3-2-4-4-4h-2l-1 2-1-2h-2z M12 11l1 2.5h2.5l-2 1.5 1 2.5-2.5-1.5-2.5 1.5 1-2.5-2-1.5h2.5z", 
+  
+  // GHS09: Environmental (Environment)
+  environment: "M15 20v-8l-3-4-3 4v8 M12 2v6 M3 14c0 2 2 3 4 3h6l2-3-2-3H7c-2 0-4 1-4 3z" 
 };
 
 // --- Helper Components ---
@@ -422,7 +440,7 @@ const PictogramList: React.FC<{ items: string[], size?: 'sm' | 'lg' }> = ({ item
             {/* The Red Diamond */}
             <div className={`relative flex items-center justify-center bg-white border-red-600 shadow-sm transition-transform hover:scale-110 ${size === 'lg' ? 'w-24 h-24 border-[6px] rounded-xl' : 'w-10 h-10 border-[3px] rounded-md'} rotate-45 mb-4 mt-2`}>
               <div className="-rotate-45">
-                 <svg viewBox="0 0 24 24" className={`${size === 'lg' ? 'w-12 h-12' : 'w-5 h-5'} text-black fill-current`} stroke="none">
+                 <svg viewBox="0 0 24 24" className={`${size === 'lg' ? 'w-16 h-16' : 'w-6 h-6'} text-black fill-current`} stroke="currentColor" strokeWidth={type === 'irritant' || type === 'compressed' ? 1.5 : 0.5}>
                     <path d={path} />
                  </svg>
               </div>
@@ -1740,8 +1758,71 @@ export default function App() {
 
             {result && (
               <div className="animate-in fade-in slide-in-from-bottom-6 duration-700">
-                {/* Summary Header */}
-                <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 p-8 mb-8 flex flex-col md:flex-row items-center justify-between gap-6 print:shadow-none print:border-none print:p-0 print:mb-10">
+                
+                {/* --- PRINT ONLY SUMMARY (One Page) --- */}
+                <div className="hidden print:block font-sans text-black p-0 m-0">
+                    {/* Header */}
+                    <div className="border-b-2 border-black pb-2 mb-4 flex justify-between items-center">
+                        <div>
+                            <h1 className="text-2xl font-bold">{result.identification.chemicalName}</h1>
+                            <div className="text-sm font-mono mt-1">CAS: {result.identification.casNumber} | Formula: {result.identification.formula}</div>
+                        </div>
+                        <div className="text-right">
+                            <div className="text-xl font-bold">HazmatAI Report</div>
+                            <div className="text-xs text-gray-500">{new Date().toLocaleDateString(lang === 'fa' ? 'fa-IR' : 'en-US')}</div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-4 mb-4">
+                        {/* Col 1: GHS & Classification */}
+                        <div className="col-span-1 border border-black p-2 rounded">
+                            <h3 className="font-bold border-b border-black mb-2 text-sm bg-gray-100 p-1">{t.secHazards}</h3>
+                            <div className="flex justify-center mb-2">
+                                <PictogramList items={result.hazards.pictograms} size="sm" />
+                            </div>
+                            <div className="text-xs">
+                                <p><strong>Class:</strong> {result.hazards.ghsClass}</p>
+                                <p className="mt-1"><strong>Health:</strong> {result.hazards.healthHazards}</p>
+                            </div>
+                        </div>
+
+                        {/* Col 2 & 3: First Aid & Emergency */}
+                        <div className="col-span-2 border border-black p-2 rounded">
+                            <h3 className="font-bold border-b border-black mb-2 text-sm bg-gray-100 p-1">{t.secFirstAid}</h3>
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                                <p><strong>{t.inhalation}:</strong> {result.firstAid.inhalation}</p>
+                                <p><strong>{t.skin}:</strong> {result.firstAid.skin}</p>
+                                <p><strong>{t.eyes}:</strong> {result.firstAid.eyes}</p>
+                                <p><strong>{t.ingestion}:</strong> {result.firstAid.ingestion}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 mb-4">
+                         <div className="border border-black p-2 rounded">
+                            <h3 className="font-bold border-b border-black mb-2 text-sm bg-gray-100 p-1">{t.secEmergency}</h3>
+                            <div className="text-xs space-y-1">
+                                <p><strong>{t.fire}:</strong> {result.emergency.fire}</p>
+                                <p><strong>{t.spill}:</strong> {result.emergency.spill}</p>
+                            </div>
+                         </div>
+                         <div className="border border-black p-2 rounded">
+                            <h3 className="font-bold border-b border-black mb-2 text-sm bg-gray-100 p-1">{t.secSafety}</h3>
+                            <div className="text-xs space-y-1">
+                                <p><strong>{t.ppe}:</strong> {result.safetyMeasures.ppe.join(', ')}</p>
+                                <p><strong>{t.storage}:</strong> {result.safetyMeasures.storage}</p>
+                            </div>
+                         </div>
+                    </div>
+                    
+                    {/* Disclaimer at bottom of print */}
+                    <div className="text-[10px] text-gray-500 border-t border-gray-300 pt-2 mt-4 text-justify">
+                        {t.warningDesc}
+                    </div>
+                </div>
+
+                {/* Summary Header (Screen View) */}
+                <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 p-8 mb-8 flex flex-col md:flex-row items-center justify-between gap-6 print:hidden">
                   <div className="flex items-center gap-6">
                     <div className="bg-slate-900 p-4 rounded-3xl shrink-0">
                       <ClipboardCheck className="w-10 h-10 text-white" />
@@ -1801,17 +1882,8 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* MSDS Warning */}
-                <div className="bg-amber-50 border-r-4 border-amber-500 p-5 rounded-2xl mb-8 flex gap-4 shadow-sm">
-                  <AlertTriangle className="w-6 h-6 text-amber-600 shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-amber-900 font-bold text-base mb-1">{t.warningTitle}</p>
-                    <p className="text-amber-800 text-sm leading-relaxed">{t.warningDesc}</p>
-                  </div>
-                </div>
-
-                {/* Accordion List */}
-                <div className="space-y-4">
+                {/* Accordion List (Hidden when printing) */}
+                <div className="space-y-4 print:hidden">
                   {/* News Section */}
                   <ExpandableSection 
                     id="news"
@@ -2008,6 +2080,16 @@ export default function App() {
                     </div>
                   )}
                 </div>
+
+                {/* MSDS Warning (Moved to Bottom, visible on screen) */}
+                <div className="bg-amber-50 border-r-4 border-amber-500 p-5 rounded-2xl mb-8 flex gap-4 shadow-sm print:hidden">
+                  <AlertTriangle className="w-6 h-6 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-amber-900 font-bold text-base mb-1">{t.warningTitle}</p>
+                    <p className="text-amber-800 text-sm leading-relaxed">{t.warningDesc}</p>
+                  </div>
+                </div>
+
               </div>
             )}
           </>
