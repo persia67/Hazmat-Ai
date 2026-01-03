@@ -2,13 +2,14 @@
 import { GoogleGenAI, Type, LiveServerMessage, Modality } from "@google/genai";
 import { ChemicalAnalysis, NewsResult, Language, InteractionResult } from "../types";
 
-const apiKey = process.env.API_KEY || '';
-const ai = new GoogleGenAI({ apiKey });
+// Always use a named parameter and obtain the API key exclusively from process.env.API_KEY
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // --- Existing Analysis ---
 export const analyzeChemical = async (chemicalName: string, lang: Language): Promise<ChemicalAnalysis> => {
   const languageName = lang === 'fa' ? 'Persian (Farsi)' : 'English';
   
+  // Use ai.models.generateContent to query GenAI with both the model name and prompt
   const response = await ai.models.generateContent({
     model: "gemini-3-pro-preview",
     contents: `Analyze the following chemical or formula: "${chemicalName}". 
@@ -113,6 +114,7 @@ export const analyzeChemical = async (chemicalName: string, lang: Language): Pro
   });
 
   try {
+    // Access .text property directly (not as a method)
     const text = response.text;
     if (!text) throw new Error("No response from AI");
     return JSON.parse(text) as ChemicalAnalysis;
@@ -122,7 +124,7 @@ export const analyzeChemical = async (chemicalName: string, lang: Language): Pro
   }
 };
 
-// --- Interaction Analysis (New) ---
+// --- Interaction Analysis ---
 export const analyzeInteraction = async (chemA: string, chemB: string, conditions: { heat: boolean, pressure: boolean }, lang: Language): Promise<InteractionResult> => {
   const languageName = lang === 'fa' ? 'Persian (Farsi)' : 'English';
   const conditionText = `Conditions included: ${conditions.heat ? 'High Heat/Thermal Decomposition' : 'Ambient Temp'} AND ${conditions.pressure ? 'High Pressure' : 'Atmospheric Pressure'}.`;
@@ -163,6 +165,7 @@ export const analyzeInteraction = async (chemA: string, chemB: string, condition
   });
 
   try {
+    // Access .text property directly
     const text = response.text;
     if (!text) throw new Error("No response from AI");
     return JSON.parse(text) as InteractionResult;
@@ -186,7 +189,9 @@ export const searchSafetyNews = async (query: string, lang: Language): Promise<N
     }
   });
 
+  // Access .text property directly
   const summary = response.text || (lang === 'fa' ? "خبر جدیدی یافت نشد." : "No recent news found.");
+  // Extract URLs from groundingChunks as required by guidelines
   // @ts-ignore
   const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
   const sources = chunks
@@ -233,7 +238,7 @@ function arrayBufferToBase64(buffer: ArrayBuffer) {
   return btoa(binary);
 }
 
-// Audio Resampling/Conversion
+// Audio Resampling/Conversion to raw PCM
 function floatTo16BitPCM(input: Float32Array) {
   const output = new Int16Array(input.length);
   for (let i = 0; i < input.length; i++) {
@@ -271,7 +276,8 @@ export class VoiceAssistant {
       this.outputContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
       this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-      const aiClient = new GoogleGenAI({ apiKey });
+      // Create a fresh instance for Live API to ensure correct key usage
+      const aiClient = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const instruction = this.lang === 'fa' 
         ? "You are a professional chemical safety consultant speaking in Persian. Keep responses concise."
         : "You are a professional chemical safety consultant speaking in English. Keep responses concise.";
@@ -325,6 +331,7 @@ export class VoiceAssistant {
       const pcm16 = floatTo16BitPCM(inputData);
       const base64 = arrayBufferToBase64(pcm16);
 
+      // Use sessionPromise.then to avoid race conditions and stale closures
       this.sessionPromise.then(session => {
         session.sendRealtimeInput({
           media: {
@@ -349,15 +356,15 @@ export class VoiceAssistant {
     
     // Handle interruption
     if (message.serverContent?.interrupted) {
-      this.nextStartTime = 0; // Reset
-      // In a real app, we would cancel current playing nodes
+      this.nextStartTime = 0; 
+      // In production, we should also track and stop all active AudioBufferSourceNodes
     }
   }
 
   private async decodeAudio(bytes: Uint8Array): Promise<AudioBuffer> {
     if (!this.outputContext) throw new Error("No output context");
     
-    // Manually decode PCM 16-bit 24kHz
+    // Manually decode PCM 16-bit 24kHz as required by guidelines
     const sampleRate = 24000;
     const int16 = new Int16Array(bytes.buffer);
     const float32 = new Float32Array(int16.length);
@@ -378,6 +385,7 @@ export class VoiceAssistant {
     source.connect(this.outputContext.destination);
 
     const currentTime = this.outputContext.currentTime;
+    // Track nextStartTime for gapless playback
     if (this.nextStartTime < currentTime) {
       this.nextStartTime = currentTime;
     }
