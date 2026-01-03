@@ -38,7 +38,10 @@ import {
   FlaskConical,
   Flame,
   Gauge,
-  BookOpen
+  BookOpen,
+  Download,
+  Upload,
+  FileJson
 } from 'lucide-react';
 import { analyzeChemical, searchSafetyNews, createChatSession, VoiceAssistant, analyzeInteraction } from './services/geminiService';
 import { ChemicalAnalysis, LoadingState, ChatMessage, NewsResult, Language, ThemeConfig, InteractionResult } from './types';
@@ -167,7 +170,13 @@ const TRANSLATIONS = {
     severityLow: 'خطر کم',
     severityNone: 'بی‌خطر',
     selectFromList: 'انتخاب از لیست مواد من',
-    listEmptyHint: 'ابتدا مواد را جستجو و ذخیره کنید.'
+    listEmptyHint: 'ابتدا مواد را جستجو و ذخیره کنید.',
+
+    // Backup
+    backup: 'پشتیبان‌گیری (Export)',
+    restore: 'بازیابی (Import)',
+    importError: 'فایل نامعتبر است یا فرمت درستی ندارد.',
+    importSuccess: 'داده‌ها با موفقیت بازیابی شدند.'
   },
   en: {
     appTitle: 'HazmatAI',
@@ -288,7 +297,13 @@ const TRANSLATIONS = {
     severityLow: 'Low Risk',
     severityNone: 'No significant reaction',
     selectFromList: 'Select from My Chemicals',
-    listEmptyHint: 'Search and save chemicals first.'
+    listEmptyHint: 'Search and save chemicals first.',
+
+    // Backup
+    backup: 'Export Backup',
+    restore: 'Import Backup',
+    importError: 'Invalid file format.',
+    importSuccess: 'Data restored successfully.'
   }
 };
 
@@ -362,31 +377,14 @@ const THEMES: Record<string, ThemeConfig> = {
 
 // --- GHS Pictogram Assets (Standard GHS Paths) ---
 const GHS_PATHS: Record<string, string> = {
-  // GHS01: Explosive (Exploding Bomb)
   explosive: "M12 2c-.3 0-.5.2-.5.5v3c0 .3.2.5.5.5s.5-.2.5-.5v-3c0-.3-.2-.5-.5-.5zM12 18c-.3 0-.5.2-.5.5v3c0 .3.2.5.5.5s.5-.2.5-.5v-3c0-.3-.2-.5-.5-.5zM6 11H3c-.3 0-.5.2-.5.5s.2.5.5.5h3c.3 0 .5-.2.5-.5s-.2-.5-.5-.5zM21 11h-3c-.3 0-.5.2-.5.5s.2.5.5.5h3c.3 0 .5-.2.5-.5s-.2-.5-.5-.5zM18.4 17l2.1 2.1c.2.2.5.2.7 0 .2-.2.2-.5 0-.7l-2.1-2.1c-.2-.2-.5-.2-.7 0-.2.2-.2.5 0 .7zM4.9 3.5c-.2-.2-.5-.2-.7 0s-.2.5 0 .7l2.1 2.1c.2.2.5.2.7 0 .2-.2.2-.5 0-.7L4.9 3.5zM19.1 4.2l-2.1 2.1c-.2.2-.2.5 0 .7.2.2.5.2.7 0l2.1-2.1c.2-.2.2-.5 0-.7-.2-.2-.5-.2-.7 0zM5.6 16.3c-.2-.2-.5-.2-.7 0l-2.1 2.1c-.2.2-.2.5 0 .7.2.2.5.2.7 0l2.1-2.1c.2-.2.2-.5 0-.7z M12 8c-2.2 0-4 1.8-4 4s1.8 4 4 4 4-1.8 4-4-1.8-4-4-4z",
-  
-  // GHS02: Flammable (Flame)
   flammable: "M12 23c0-4.3 3.3-6.5 3.3-9.5 0-3-1.8-4.5-1.8-6.5 0 4-3.5 5-3.5 9 0 3.5 2 7 2 7zm-1-16c0 0 2.5 2 2.5 5 0 2.5-1.5 3.5-1.5 5.5 0-2-1-3-1-5 0-3-1-4 0-5.5z M10 23h4", 
-  
-  // GHS03: Oxidizing (Flame over Circle)
   oxidizing: "M12 4.5c0 0 2.5 3 2.5 5 0 1.5-1 2.5-2.5 2.5-1.5 0-2.5-1-2.5-2.5 0-2 2.5-5 2.5-5z M12 13a5 5 0 1 0 0 10 5 5 0 0 0 0-10zm0 8a3 3 0 1 1 0-6 3 3 0 0 1 0 6z", 
-  
-  // GHS04: Compressed Gas (Gas Cylinder)
   compressed: "M8 6h8v13H8z M10 2h4v4h-4z M7 6h10 M7 19h10", 
-  
-  // GHS05: Corrosive (Corrosion)
   corrosive: "M2 6h7v2H2z M15 6h7v2h-7z M4 9l3 6M12 9l3 6M2 19h20c0 1.5-1 2.5-2.5 2.5h-15C3 21.5 2 20.5 2 19z M5 17h4 M15 17h4 M6 13h2 M16 13h2", 
-  
-  // GHS06: Toxic (Skull and Crossbones)
   toxic: "M12 2c-3.3 0-6 2.7-6 6 0 2 1.5 4 3.5 5v1.5h5V13c2-1 3.5-3 3.5-5 0-3.3-2.7-6-6-6zm-2 5.5a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0zm5.5 1.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z M4 20l16-14M4 6l16 14", 
-  
-  // GHS07: Irritant (Exclamation Mark)
   irritant: "M11 5h2v9h-2z M11 17h2v2h-2z", 
-  
-  // GHS08: Health Hazard (Health Hazard / Carcinogen)
   health: "M12 4a3 3 0 1 0 0 6 3 3 0 0 0 0-6zm-5 8c-2 0-4 1-4 4v4h18v-4c0-3-2-4-4-4h-2l-1 2-1-2h-2z M12 11l1 2.5h2.5l-2 1.5 1 2.5-2.5-1.5-2.5 1.5 1-2.5-2-1.5h2.5z", 
-  
-  // GHS09: Environmental (Environment)
   environment: "M15 20v-8l-3-4-3 4v8 M12 2v6 M3 14c0 2 2 3 4 3h6l2-3-2-3H7c-2 0-4 1-4 3z" 
 };
 
@@ -411,7 +409,6 @@ const InfoItem: React.FC<{ label: string, value: string | string[], lang: Langua
   </div>
 );
 
-// New Component: Renders a list of GHS Pictograms as Safety Signs
 const PictogramList: React.FC<{ items: string[], size?: 'sm' | 'lg' }> = ({ items, size = 'lg' }) => {
   const getIconType = (name: string): string => {
     const n = name.toLowerCase();
@@ -424,7 +421,7 @@ const PictogramList: React.FC<{ items: string[], size?: 'sm' | 'lg' }> = ({ item
     if (n.includes('irrit') || n.includes('exclam')) return 'irritant';
     if (n.includes('health') || n.includes('carcin') || n.includes('muta')) return 'health';
     if (n.includes('envir') || n.includes('aqua')) return 'environment';
-    return 'irritant'; // Default fallback
+    return 'irritant'; 
   };
 
   const uniqueItems = Array.from(new Set(items)) as string[];
@@ -437,7 +434,6 @@ const PictogramList: React.FC<{ items: string[], size?: 'sm' | 'lg' }> = ({ item
         
         return (
           <div key={idx} className="flex flex-col items-center group">
-            {/* The Red Diamond */}
             <div className={`relative flex items-center justify-center bg-white border-red-600 shadow-sm transition-transform hover:scale-110 ${size === 'lg' ? 'w-24 h-24 border-[6px] rounded-xl' : 'w-10 h-10 border-[3px] rounded-md'} rotate-45 mb-4 mt-2`}>
               <div className="-rotate-45">
                  <svg viewBox="0 0 24 24" className={`${size === 'lg' ? 'w-16 h-16' : 'w-6 h-6'} text-black fill-current`} stroke="currentColor" strokeWidth={type === 'irritant' || type === 'compressed' ? 1.5 : 0.5}>
@@ -445,7 +441,6 @@ const PictogramList: React.FC<{ items: string[], size?: 'sm' | 'lg' }> = ({ item
                  </svg>
               </div>
             </div>
-            {/* Label */}
             {size === 'lg' && (
               <span className="text-xs font-bold text-slate-700 text-center max-w-[100px] leading-tight mt-2">{item}</span>
             )}
@@ -563,7 +558,6 @@ const InteractionView: React.FC<{
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        {/* Input Card */}
         <div className="md:col-span-1 bg-white rounded-3xl shadow-sm border border-slate-100 p-6 h-fit">
           <div className="space-y-6">
             <div>
@@ -640,7 +634,6 @@ const InteractionView: React.FC<{
           </div>
         </div>
 
-        {/* Result Card */}
         <div className="md:col-span-2 space-y-6">
           {!result && !loading && (
              <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl h-full min-h-[400px] flex flex-col items-center justify-center text-slate-400 p-8 text-center">
@@ -661,7 +654,6 @@ const InteractionView: React.FC<{
 
           {result && (
             <>
-              {/* Severity Banner */}
               <div className={`rounded-2xl p-6 border-l-8 shadow-sm flex items-center gap-5 ${getSeverityColor(result.severity).replace('text-white', 'bg-opacity-10').replace('bg-', 'bg-').replace('text-slate-900', '')} ${
                 result.severity === 'HIGH' ? 'bg-red-50 border-red-600' : 
                 result.severity === 'MEDIUM' ? 'bg-orange-50 border-orange-500' :
@@ -682,7 +674,6 @@ const InteractionView: React.FC<{
                 </div>
               </div>
 
-              {/* Equation */}
               <div className="bg-slate-900 text-white p-6 rounded-2xl shadow-lg relative overflow-hidden">
                 <div className="absolute top-0 right-0 p-4 opacity-10">
                   <FlaskConical className="w-24 h-24" />
@@ -691,7 +682,6 @@ const InteractionView: React.FC<{
                 <p className="text-lg md:text-xl font-mono leading-relaxed" dir="ltr">{result.equation}</p>
               </div>
 
-              {/* Details Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
                   <h4 className="font-bold text-slate-800 flex items-center gap-2 mb-4">
@@ -716,7 +706,6 @@ const InteractionView: React.FC<{
                 </div>
               </div>
 
-              {/* Hazards & Safety */}
               <div className="bg-red-50 p-6 rounded-2xl border border-red-100">
                  <h4 className="font-bold text-red-800 flex items-center gap-2 mb-3">
                     <ShieldAlert className="w-5 h-5" />
@@ -1075,7 +1064,6 @@ const ChatWidget = ({ lang, theme }: { lang: Language, theme: ThemeConfig }) => 
     <div className={`fixed bottom-6 ${isRtl ? 'right-6' : 'left-6'} z-50 flex flex-col ${isRtl ? 'items-end' : 'items-start'} gap-4 no-print`}>
       {isOpen && (
         <div className="bg-white rounded-2xl shadow-2xl w-80 sm:w-96 h-[500px] flex flex-col border border-slate-200 animate-in slide-in-from-bottom-10 fade-in" dir={isRtl ? 'rtl' : 'ltr'}>
-          {/* Header */}
           <div className="bg-slate-900 text-white p-4 rounded-t-2xl flex justify-between items-center">
             <div className="flex items-center gap-2">
               <div className={`${theme.primary} p-1.5 rounded-lg`}>
@@ -1096,7 +1084,6 @@ const ChatWidget = ({ lang, theme }: { lang: Language, theme: ThemeConfig }) => 
             </div>
           </div>
 
-          {/* Content */}
           {mode === 'chat' ? (
             <>
               <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
@@ -1147,7 +1134,6 @@ const ChatWidget = ({ lang, theme }: { lang: Language, theme: ThemeConfig }) => 
             </>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center bg-slate-900 rounded-b-2xl relative overflow-hidden">
-               {/* Ambient Background */}
                <div className={`absolute inset-0 bg-red-600/10 transition-opacity duration-1000 ${isVoiceActive ? 'opacity-100' : 'opacity-0'}`}></div>
                <div className="relative z-10 flex flex-col items-center gap-6">
                  <div className={`w-24 h-24 rounded-full flex items-center justify-center transition-all duration-300 ${isVoiceActive ? `${theme.primary} ${theme.shadow} scale-110` : 'bg-slate-700'}`}>
@@ -1187,7 +1173,6 @@ const ChatWidget = ({ lang, theme }: { lang: Language, theme: ThemeConfig }) => 
   );
 };
 
-// ... SettingsModal (Same as previous) ...
 const SettingsModal: React.FC<{ 
   isOpen: boolean; 
   onClose: () => void; 
@@ -1269,7 +1254,6 @@ const SettingsModal: React.FC<{
   );
 };
 
-// ... ComparisonTable (Updated to use PictogramList) ...
 const ComparisonTable: React.FC<{
   items: ChemicalAnalysis[];
   onRemove: (index: number) => void;
@@ -1362,39 +1346,31 @@ const ComparisonTable: React.FC<{
             {renderSectionHeader(t.secID, ClipboardCheck, "bg-blue-50")}
             {renderRow(t.formula, i => i.identification.formula)}
             {renderRow(t.synonyms, i => i.identification.synonyms)}
-
             {renderSectionHeader(t.secHazards, AlertTriangle, "bg-red-50")}
             {renderRow(t.ghsClass, i => i.hazards.ghsClass)}
-            {/* Pictograms rendered with custom component */}
             {renderRow(t.pictograms, i => i.hazards.pictograms, true)}
             {renderRow(t.phyHazards, i => i.hazards.physicalHazards)}
             {renderRow(t.healthHazards, i => i.hazards.healthHazards)}
-
             {renderSectionHeader(t.secExposure, Wind, "bg-teal-50")}
             {renderRow("TLV", i => i.exposureLimits.tlv)}
             {renderRow("PEL", i => i.exposureLimits.pel)}
             {renderRow("STEL", i => i.exposureLimits.stel)}
-
             {renderSectionHeader(t.secSafety, ShieldAlert, "bg-indigo-50")}
             {renderRow(t.ppe, i => i.safetyMeasures.ppe)}
             {renderRow(t.engControls, i => i.safetyMeasures.engineeringControls)}
             {renderRow(t.storage, i => i.safetyMeasures.storage)}
             {renderRow(t.segregation, i => i.safetyMeasures.segregation)}
-
             {renderSectionHeader(t.secReactions, ThermometerSnowflake, "bg-orange-50")}
             {renderRow(t.incompatible, i => i.reactions.incompatibleMaterials)}
             {renderRow(t.dangReact, i => i.reactions.dangerousReactions)}
-
             {renderSectionHeader(t.secFirstAid, Droplets, "bg-rose-50")}
             {renderRow(t.skin, i => i.firstAid.skin)}
             {renderRow(t.eyes, i => i.firstAid.eyes)}
             {renderRow(t.inhalation, i => i.firstAid.inhalation)}
             {renderRow(t.ingestion, i => i.firstAid.ingestion)}
-
             {renderSectionHeader(t.secEmergency, ShieldAlert, "bg-slate-50")}
             {renderRow(t.spill, i => i.emergency.spill)}
             {renderRow(t.fire, i => i.emergency.fire)}
-
             {renderSectionHeader(t.secTransport, Truck, "bg-gray-50")}
             {renderRow(t.unNum, i => i.transport.unNumber)}
             {renderRow(t.transClass, i => i.transport.class)}
@@ -1413,26 +1389,22 @@ export default function App() {
   const [result, setResult] = useState<ChemicalAnalysis | null>(null);
   const [error, setError] = useState<string | null>(null);
   
-  // Settings State
   const [lang, setLang] = useState<Language>('fa');
   const [currentThemeId, setCurrentThemeId] = useState<string>('industrial');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
-  // Derived state
   const t = TRANSLATIONS[lang];
   const theme = THEMES[currentThemeId];
 
-  // Comparison & Saved State
   const [comparisonList, setComparisonList] = useState<ChemicalAnalysis[]>([]);
   const [isComparisonMode, setIsComparisonMode] = useState(false);
   const [savedItems, setSavedItems] = useState<ChemicalAnalysis[]>([]);
   const [isSavedModalOpen, setIsSavedModalOpen] = useState(false);
   const [isConverterOpen, setIsConverterOpen] = useState(false);
-  
-  // New: Interaction Mode
   const [isInteractionMode, setIsInteractionMode] = useState(false);
 
-  // Track open sections
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     identification: true,
     hazards: true,
@@ -1440,7 +1412,6 @@ export default function App() {
     news: true,
   });
 
-  // Effects
   useEffect(() => {
     document.documentElement.dir = lang === 'fa' ? 'rtl' : 'ltr';
     document.documentElement.lang = lang;
@@ -1485,7 +1456,7 @@ export default function App() {
     setStatus(LoadingState.SUCCESS);
     setIsSavedModalOpen(false);
     setIsComparisonMode(false);
-    setIsInteractionMode(false); // Close other modes
+    setIsInteractionMode(false);
     setQuery(item.identification.chemicalName);
     setOpenSections({
       identification: true,
@@ -1498,6 +1469,51 @@ export default function App() {
       transport: false,
       news: true
     });
+  };
+
+  const handleExportBackup = () => {
+    const dataStr = JSON.stringify(savedItems, null, 2);
+    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+    const exportFileDefaultName = `hazmatai-backup-${new Date().toISOString().split('T')[0]}.json`;
+
+    const linkElement = document.createElement('a');
+    linkElement.setAttribute('href', dataUri);
+    linkElement.setAttribute('download', exportFileDefaultName);
+    linkElement.click();
+  };
+
+  const handleImportBackup = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const content = e.target?.result as string;
+        const importedData = JSON.parse(content);
+        if (Array.isArray(importedData)) {
+          // Merge logic: avoid duplicates by CAS or name
+          const merged = [...savedItems];
+          importedData.forEach((newItem: ChemicalAnalysis) => {
+            const exists = merged.some(m => 
+               m.identification.casNumber === newItem.identification.casNumber ||
+               m.identification.chemicalName === newItem.identification.chemicalName
+            );
+            if (!exists) merged.push(newItem);
+          });
+          setSavedItems(merged);
+          saveToLocalStorage(merged);
+          alert(t.importSuccess);
+        } else {
+          throw new Error("Format invalid");
+        }
+      } catch (err) {
+        alert(t.importError);
+      }
+    };
+    reader.readAsText(file);
+    // Reset input
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const toggleSection = (id: string) => {
@@ -1580,22 +1596,47 @@ export default function App() {
 
   return (
     <div className="min-h-screen pb-32 bg-slate-50/50 transition-colors duration-500" dir={isRtl ? 'rtl' : 'ltr'}>
-      {/* Modals */}
       <UnitConverterModal isOpen={isConverterOpen} onClose={() => setIsConverterOpen(false)} lang={lang} theme={theme} />
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} lang={lang} setLang={setLang} themeId={currentThemeId} setThemeId={setCurrentThemeId} />
 
-      {/* Saved Items Modal */}
       {isSavedModalOpen && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
           <div className="bg-white rounded-3xl w-full max-w-2xl max-h-[80vh] flex flex-col shadow-2xl">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-              <h3 className="font-bold text-xl flex items-center gap-2 text-slate-800">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-3xl">
+              <div className="flex items-center gap-3">
                 <Bookmark className={`${theme.accent} w-6 h-6`} />
-                {t.savedItems}
-              </h3>
-              <button onClick={() => setIsSavedModalOpen(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
-                <X className="w-5 h-5 text-slate-500" />
-              </button>
+                <h3 className="font-bold text-xl text-slate-800">{t.savedItems}</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  onChange={handleImportBackup} 
+                  accept=".json" 
+                  className="hidden" 
+                />
+                <button 
+                  onClick={() => fileInputRef.current?.click()}
+                  className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 rounded-xl transition-all shadow-sm flex items-center gap-2 text-xs font-bold"
+                  title={t.restore}
+                >
+                  <Upload className="w-4 h-4" />
+                  <span className="hidden sm:inline">{t.restore}</span>
+                </button>
+                <button 
+                  onClick={handleExportBackup}
+                  disabled={savedItems.length === 0}
+                  className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:text-emerald-600 rounded-xl transition-all shadow-sm flex items-center gap-2 text-xs font-bold disabled:opacity-50"
+                  title={t.backup}
+                >
+                  <Download className="w-4 h-4" />
+                  <span className="hidden sm:inline">{t.backup}</span>
+                </button>
+                <div className="w-px h-6 bg-slate-200 mx-1"></div>
+                <button onClick={() => setIsSavedModalOpen(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
+                  <X className="w-5 h-5 text-slate-500" />
+                </button>
+              </div>
             </div>
             <div className="overflow-y-auto p-6 space-y-3">
               {savedItems.length === 0 ? (
@@ -1632,7 +1673,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Header */}
       <header className={`bg-gradient-to-l ${theme.gradient} text-white shadow-xl no-print sticky top-0 z-40 transition-all duration-500`}>
         <div className="max-w-6xl mx-auto px-4 py-6 flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-4 cursor-pointer" onClick={() => {
@@ -1692,10 +1732,7 @@ export default function App() {
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="max-w-4xl mx-auto px-4 mt-10 relative">
-        
-        {/* Interaction Mode View */}
         {isInteractionMode ? (
           <InteractionView 
             savedItems={savedItems}
@@ -1712,7 +1749,6 @@ export default function App() {
             theme={theme}
           />
         ) : (
-          /* Normal Search View */
           <>
             {status === LoadingState.IDLE && (
               <div className="flex flex-col items-center justify-center py-20 text-slate-400 no-print">
@@ -1726,7 +1762,6 @@ export default function App() {
               </div>
             )}
             
-            {/* ... Rest of Normal View (Loading, Error, Result) ... */}
             {status === LoadingState.LOADING && (
               <div className="flex flex-col items-center justify-center py-32 no-print">
                 <div className="relative mb-8">
@@ -1758,10 +1793,7 @@ export default function App() {
 
             {result && (
               <div className="animate-in fade-in slide-in-from-bottom-6 duration-700">
-                
-                {/* --- PRINT ONLY SUMMARY (One Page) --- */}
                 <div className="hidden print:block font-sans text-black p-0 m-0">
-                    {/* Header */}
                     <div className="border-b-2 border-black pb-2 mb-4 flex justify-between items-center">
                         <div>
                             <h1 className="text-2xl font-bold">{result.identification.chemicalName}</h1>
@@ -1774,7 +1806,6 @@ export default function App() {
                     </div>
 
                     <div className="grid grid-cols-3 gap-4 mb-4">
-                        {/* Col 1: GHS & Classification */}
                         <div className="col-span-1 border border-black p-2 rounded">
                             <h3 className="font-bold border-b border-black mb-2 text-sm bg-gray-100 p-1">{t.secHazards}</h3>
                             <div className="flex justify-center mb-2">
@@ -1786,7 +1817,6 @@ export default function App() {
                             </div>
                         </div>
 
-                        {/* Col 2 & 3: First Aid & Emergency */}
                         <div className="col-span-2 border border-black p-2 rounded">
                             <h3 className="font-bold border-b border-black mb-2 text-sm bg-gray-100 p-1">{t.secFirstAid}</h3>
                             <div className="grid grid-cols-2 gap-2 text-xs">
@@ -1815,13 +1845,11 @@ export default function App() {
                          </div>
                     </div>
                     
-                    {/* Disclaimer at bottom of print */}
                     <div className="text-[10px] text-gray-500 border-t border-gray-300 pt-2 mt-4 text-justify">
                         {t.warningDesc}
                     </div>
                 </div>
 
-                {/* Summary Header (Screen View) */}
                 <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 p-8 mb-8 flex flex-col md:flex-row items-center justify-between gap-6 print:hidden">
                   <div className="flex items-center gap-6">
                     <div className="bg-slate-900 p-4 rounded-3xl shrink-0">
@@ -1882,9 +1910,7 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Accordion List (Hidden when printing) */}
                 <div className="space-y-4 print:hidden">
-                  {/* News Section */}
                   <ExpandableSection 
                     id="news"
                     isOpen={!!openSections.news}
@@ -1926,7 +1952,6 @@ export default function App() {
                     <div className="space-y-6">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         <InfoItem label={t.ghsClass} value={result.hazards.ghsClass} lang={lang} />
-                        {/* New Pictogram Visual Display */}
                         <div className="mb-4 last:mb-0">
                            <span className="text-slate-500 text-xs font-bold block mb-4 uppercase tracking-wider">{t.pictograms}</span>
                            <PictogramList items={result.hazards.pictograms} />
@@ -2063,7 +2088,6 @@ export default function App() {
                     </div>
                   </ExpandableSection>
 
-                  {/* References Section */}
                   {result.references && result.references.length > 0 && (
                     <div className="mb-4 bg-white rounded-2xl shadow-sm border border-slate-100 p-5 mt-4">
                       <div className="flex items-center gap-2 mb-3 text-slate-400">
@@ -2081,7 +2105,6 @@ export default function App() {
                   )}
                 </div>
 
-                {/* MSDS Warning (Moved to Bottom, visible on screen) */}
                 <div className="bg-amber-50 border-r-4 border-amber-500 p-5 rounded-2xl mb-8 flex gap-4 shadow-sm print:hidden">
                   <AlertTriangle className="w-6 h-6 text-amber-600 shrink-0 mt-0.5" />
                   <div>
@@ -2096,7 +2119,6 @@ export default function App() {
         )}
       </main>
 
-      {/* Floating Comparison Bar */}
       {comparisonList.length > 0 && !isComparisonMode && !isInteractionMode && (
         <div className="fixed bottom-6 inset-x-0 mx-auto max-w-lg px-4 z-40 animate-in slide-in-from-bottom-10 fade-in no-print">
           <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-2xl shadow-slate-900/40 flex items-center justify-between">
@@ -2128,10 +2150,8 @@ export default function App() {
         </div>
       )}
 
-      {/* Chat Widget */}
       <ChatWidget lang={lang} theme={theme} />
 
-      {/* Footer */}
       <footer className="mt-20 border-t border-slate-200 py-12 text-center text-slate-400 no-print">
         <div className="max-w-xl mx-auto px-4">
           <p className="text-sm font-medium mb-2">HazmatAI v{APP_VERSION}</p>
@@ -2145,3 +2165,4 @@ export default function App() {
     </div>
   );
 }
+
